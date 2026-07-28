@@ -8,7 +8,6 @@ import org.lwjgl.glfw.GLFW;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
@@ -203,12 +202,9 @@ public final class RelicHudEditScreen extends Screen {
 
 		context.centeredText(font, Component.literal(
 						"Ziehen zum Verschieben  ·  Größe: Linksklick größer, Rechtsklick kleiner"),
-				width / 2, height - 40, RelicOverlayRenderer.COLOUR_TITLE);
-		context.centeredText(font, Component.literal(
-						"Pfeiltasten: 1px  ·  Shift+Pfeil: 10px  ·  Esc: speichern"),
-				width / 2, height - 27, HINT);
-		context.centeredText(font, Component.literal(describeAnchor()),
-				width / 2, height - 14, HINT);
+				width / 2, height - 30, RelicOverlayRenderer.COLOUR_TITLE);
+		context.centeredText(font, Component.literal("Esc speichern  ·  " + describeAnchor()),
+				width / 2, height - 16, HINT);
 	}
 
 	private void drawOutline(GuiGraphicsExtractor context, int colour) {
@@ -223,7 +219,6 @@ public final class RelicHudEditScreen extends Screen {
 
 	private String describeAnchor() {
 		return (anchorsBottom() ? "unten" : "oben") + " " + (anchorsRight() ? "rechts" : "links")
-				+ "  ·  hudX " + storedX() + ", hudY " + storedY()
 				+ "  ·  Größe " + scaleLabel();
 	}
 
@@ -278,24 +273,6 @@ public final class RelicHudEditScreen extends Screen {
 		return scaleButton != null
 				&& x >= scaleButton.getX() && x < scaleButton.getX() + scaleButton.getWidth()
 				&& y >= scaleButton.getY() && y < scaleButton.getY() + scaleButton.getHeight();
-	}
-
-	@Override
-	public boolean keyPressed(KeyEvent event) {
-		int step = (event.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0 ? 10 : 1;
-
-		switch (event.key()) {
-			case GLFW.GLFW_KEY_LEFT -> boxX -= step;
-			case GLFW.GLFW_KEY_RIGHT -> boxX += step;
-			case GLFW.GLFW_KEY_UP -> boxY -= step;
-			case GLFW.GLFW_KEY_DOWN -> boxY += step;
-			default -> {
-				return super.keyPressed(event);
-			}
-		}
-
-		clampIntoView();
-		return true;
 	}
 
 	private boolean isInsideBox(double x, double y) {

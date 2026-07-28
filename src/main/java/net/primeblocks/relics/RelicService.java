@@ -9,16 +9,15 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
 
 import net.primeblocks.relics.api.PrimeApiClient;
-import net.primeblocks.relics.model.RelicOverview;
+import net.primeblocks.relics.auth.AuthManager;
 import net.primeblocks.relics.state.RelicState;
 
 /**
  * Owns the polling loop against the public API and keeps {@link RelicState}'s relic data fresh.
  *
- * <p>Reads go through the unauthenticated {@code /debug/players/{uuid}} endpoint by default: the
- * client already knows its own UUID, so no login is needed. The API document calls that endpoint
- * debug-only, so {@link #useToken} lets the mod switch to the authenticated {@code /me} endpoint
- * once the player has completed the in-game login flow.
+ * <p>Reads go exclusively through the authenticated {@code /me} endpoint. The API also exposes an
+ * unauthenticated debug route, but it is labelled debug-only and could disappear without warning,
+ * so the mod does not build on it.
  */
 public final class RelicService {
 	private final RelicsConfig config;
@@ -26,7 +25,7 @@ public final class RelicService {
 	private final AtomicBoolean fetchInFlight = new AtomicBoolean();
 
 	private volatile PrimeApiClient client;
-	private volatile String token;
+	private volatile AuthManager authManager;
 	private volatile String resolvedDatabase;
 	private volatile String lastDetected;
 	private volatile boolean menuOpen;
@@ -65,19 +64,8 @@ public final class RelicService {
 		return menuOpen ? config.menuRefreshIntervalMillis() : config.refreshIntervalMillis();
 	}
 
-	/** Rebuilds the HTTP client after {@code apiBaseUrl} changed. */
-	public void reloadClient() {
-		this.client = new PrimeApiClient(config.apiBaseUrl);
-		this.resolvedDatabase = null;
-	}
-
-	/** Switches subsequent reads to the authenticated endpoint. Held in memory only. */
-	public void useToken(String token) {
-		this.token = token;
-	}
-
-	public boolean hasToken() {
-		return token != null && !token.isBlank();
+	public void setAuthManager(AuthManager authManager) {
+		this.authManager = authManager;
 	}
 
 	public void onDisconnect() {
@@ -109,12 +97,6 @@ public final class RelicService {
 		String detected = databaseFor(minecraft);
 
 		if (detected != null && !detected.equals(lastDetected)) {
-			if (lastDetected != null) {
-				PrimeRelicsClient.LOGGER.info("Citybuild changed: {} -> {}", lastDetected, detected);
-			} else if (config.verboseTracking) {
-				PrimeRelicsClient.LOGGER.info("Citybuild detected: {}", detected);
-			}
-
 			lastDetected = detected;
 			resolvedDatabase = detected;
 			state.onDatabaseChanged(detected);
@@ -184,13 +166,21 @@ public final class RelicService {
 		}
 
 		UUID owner = minecraft.player.getUUID();
+		String bearer = authManager != null ? authManager.tokenFor(owner) : null;
+
+		// Without a link there is nothing to ask with. AuthManager is already nudging the player.
+		if (bearer == null) {
+			fetchInFlight.set(false);
+			state.onNotLinked();
+			return CompletableFuture.completedFuture(null);
+		}
+
 		String detected = databaseFor(minecraft);
-		boolean certain = detected != null;
 
 		return resolveDatabase(detected)
-				.thenCompose(database -> fetchOverview(database, owner)
+				.thenCompose(database -> client.fetchOwnOverview(database, bearer)
 						.thenAccept(overview -> {
-							state.onFetched(database, certain, overview);
+							state.onFetched(database, overview);
 							// Fresh relic data can change which set the open menu maps onto, so
 							// give the tracker a chance to re-resolve. Client thread: the callback
 							// touches screen state.
@@ -198,21 +188,18 @@ public final class RelicService {
 						}))
 				.exceptionally(throwable -> {
 					Throwable cause = PrimeApiClient.rootCause(throwable);
+
+					// A rejected token is not a transient error: drop it so the player is asked to
+					// link again instead of silently retrying forever.
+					if (cause instanceof PrimeApiClient.ApiException api && api.isUnauthorized()
+							&& authManager != null) {
+						minecraft.execute(() -> authManager.invalidate(owner));
+					}
+
 					state.onFetchFailed(cause.getMessage());
-					PrimeRelicsClient.LOGGER.warn("Relic fetch failed: {}", cause.toString());
 					return null;
 				})
 				.whenComplete((ignored, throwable) -> fetchInFlight.set(false));
-	}
-
-	private CompletableFuture<RelicOverview> fetchOverview(String database, UUID owner) {
-		String bearer = token;
-
-		if (bearer != null && !bearer.isBlank()) {
-			return client.fetchOwnOverview(database, bearer);
-		}
-
-		return client.fetchOverviewUnauthenticated(database, owner);
 	}
 
 	/**

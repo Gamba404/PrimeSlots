@@ -27,9 +27,6 @@ import net.primeblocks.relics.mixin.PlayerTabOverlayAccessor;
  * (Farmwelt-5)" — which is checked first. That also keeps the reading correct inside a farm world,
  * since the footer still names the owning citybuild there. The scoreboard and other sources are
  * kept as secondary candidates in case the footer format changes.
- *
- * <p>Every text this looks at is exposed through {@code /primerelics where}, so a miss can be
- * diagnosed without guessing.
  */
 public final class CityBuildDetector {
 	/**
@@ -66,11 +63,8 @@ public final class CityBuildDetector {
 		return matcher.find() ? "cb" + matcher.group(1) : null;
 	}
 
-	/**
-	 * Every server-provided string the detector inspects, most authoritative first. Exposed so
-	 * {@code /primerelics where} can show exactly what the client can see.
-	 */
-	public static List<String> candidateTexts(Minecraft minecraft) {
+	/** Every server-provided string the detector inspects, most authoritative first. */
+	private static List<String> candidateTexts(Minecraft minecraft) {
 		List<String> texts = new ArrayList<>();
 		ClientPacketListener connection = minecraft.getConnection();
 
@@ -123,8 +117,8 @@ public final class CityBuildDetector {
 		}
 
 		// Footer before header: the footer is where the current server is named.
-		addComponent(texts, accessor.primerelics$getFooter());
-		addComponent(texts, accessor.primerelics$getHeader());
+		addComponent(texts, accessor.primeslots$getFooter());
+		addComponent(texts, accessor.primeslots$getHeader());
 	}
 
 	private static void addComponent(List<String> texts, Component component) {

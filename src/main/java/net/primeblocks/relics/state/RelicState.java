@@ -8,13 +8,8 @@ import net.primeblocks.relics.model.RelicOverview;
 import net.primeblocks.relics.model.RelicSet;
 
 /**
- * Everything the HUD needs, merged from the two sources this mod has:
- *
- * <ul>
- *   <li>the public API, which knows <em>what</em> is in each set but not which set is worn;</li>
- *   <li>the in-game {@code /slots} menu, which is the only place that reveals the active set
- *       and the player's set names.</li>
- * </ul>
+ * Everything the HUD needs, merged from the API (relics, stats, and which set is equipped) and
+ * the in-game {@code /slots} menu (the player's custom set names).
  *
  * <p>Written from HTTP callback threads and the client tick thread, read from the render thread,
  * so every field is volatile or a concurrent collection.
@@ -22,10 +17,8 @@ import net.primeblocks.relics.model.RelicSet;
 public final class RelicState {
 	private volatile RelicOverview overview;
 	private volatile String database;
-	/** False when the database was guessed rather than read off the server; surfaced in the HUD. */
-	private volatile boolean databaseCertain;
-	private volatile long lastFetchAt;
 	private volatile String lastError;
+	private volatile boolean notLinked;
 
 	private volatile Integer activeSetId;
 	/**
@@ -35,7 +28,6 @@ public final class RelicState {
 	 */
 	private volatile Integer activeSetNumber;
 	private volatile ActiveSetSource activeSetSource = ActiveSetSource.UNKNOWN;
-	private volatile long activeSetSeenAt;
 
 	private final Map<Integer, String> setNames = new ConcurrentHashMap<>();
 	/** Last known active set per database, so switching citybuilds back and forth is seamless. */
@@ -49,10 +41,6 @@ public final class RelicState {
 		return database;
 	}
 
-	public long lastFetchAt() {
-		return lastFetchAt;
-	}
-
 	public String lastError() {
 		return lastError;
 	}
@@ -61,20 +49,11 @@ public final class RelicState {
 		return activeSetSource;
 	}
 
-	public long activeSetSeenAt() {
-		return activeSetSeenAt;
-	}
-
-	public boolean databaseCertain() {
-		return databaseCertain;
-	}
-
-	public void onFetched(String database, boolean certain, RelicOverview overview) {
+	public void onFetched(String database, RelicOverview overview) {
 		this.database = database;
-		this.databaseCertain = certain;
 		this.overview = overview;
-		this.lastFetchAt = System.currentTimeMillis();
 		this.lastError = null;
+		this.notLinked = false;
 
 		// The API flags the equipped set itself, so the overlay works straight after joining —
 		// no need to open /slots at all. The menu is still read because it reacts within a tick
@@ -141,7 +120,17 @@ public final class RelicState {
 
 	public void onFetchFailed(String message) {
 		this.lastError = message;
-		this.lastFetchAt = System.currentTimeMillis();
+	}
+
+	/** No API token yet, so nothing can be fetched. Distinct from a failure. */
+	public void onNotLinked() {
+		this.notLinked = true;
+		this.overview = null;
+		this.lastError = null;
+	}
+
+	public boolean notLinked() {
+		return notLinked;
 	}
 
 	/**
@@ -155,7 +144,6 @@ public final class RelicState {
 		this.activeSetNumber = menuNumber;
 		this.activeSetId = setId;
 		this.activeSetSource = ActiveSetSource.SLOTS_MENU;
-		this.activeSetSeenAt = System.currentTimeMillis();
 	}
 
 	public Integer activeSetNumber() {
@@ -202,12 +190,10 @@ public final class RelicState {
 	public void reset() {
 		overview = null;
 		database = null;
-		lastFetchAt = 0L;
 		lastError = null;
 		activeSetId = null;
 		activeSetNumber = null;
 		activeSetSource = ActiveSetSource.UNKNOWN;
-		activeSetSeenAt = 0L;
 		setNames.clear();
 	}
 }

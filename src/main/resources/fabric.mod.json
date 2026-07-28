@@ -3,7 +3,7 @@
 	"id": "primeslots",
 	"version": "${version}",
 	"name": "PrimeSlots",
-	"description": "Zeigt das aktuell ausgerüstete Relikt-Set (/slots) samt Stats, Synergien und effektiven Gesamtwerten als HUD-Overlay an. Erkennt den Citybuild automatisch.",
+	"description": "Zeigt dein ausgerüstetes Relikt-Set dauerhaft auf dem Bildschirm — mit Synergien und den effektiven Gesamtwerten. Nur für PrimeBlocks.",
 	"authors": [
 		"BIG_Gamba"
 	],

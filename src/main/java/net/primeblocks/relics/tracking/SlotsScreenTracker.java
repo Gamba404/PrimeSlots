@@ -1,6 +1,5 @@
 package net.primeblocks.relics.tracking;
 
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -12,24 +11,16 @@ import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 
-import net.primeblocks.relics.PrimeRelicsClient;
 import net.primeblocks.relics.RelicService;
-import net.primeblocks.relics.RelicsConfig;
 import net.primeblocks.relics.model.RelicOverview;
 import net.primeblocks.relics.model.RelicSet;
 import net.primeblocks.relics.state.RelicState;
 
 /**
- * Watches for the {@code /slots} menu and keeps {@link RelicState}'s notion of the active set
- * up to date.
+ * Watches for the {@code /slots} menu.
  *
- * <p>This is the half of the mod the API cannot provide: {@code RelicSetResponse} carries an id and
- * its slots, but nothing that says which set the player currently has equipped, and no set names.
- * Opening {@code /slots} is therefore the only moment the client learns either.
- *
- * <p>Everything here runs without player input. A container screen swallows keyboard focus, so no
- * command can be typed while the menu is open — dumps are written as the menu opens, whenever its
- * contents change, and once more on close.
+ * <p>Two jobs: pick up the player's custom set names, which the API does not carry, and switch the
+ * service to its fast poll while the menu is open so swapping a relic shows up right away.
  */
 public final class SlotsScreenTracker {
 	/** Container contents arrive over several packets; re-reading every tick would be wasteful. */
@@ -39,10 +30,8 @@ public final class SlotsScreenTracker {
 	private static final long CLOSE_REFRESH_DELAY_MILLIS = 750;
 
 	private final RelicState state;
-	private final RelicsConfig config;
-	private final DumpWriter dumpWriter;
 	private final RelicService service;
-	private volatile SlotsMenuParser parser;
+	private final SlotsMenuParser parser = new SlotsMenuParser();
 
 	private ContainerSnapshot lastSnapshot;
 	private SlotsMenuReading lastReading;
@@ -50,33 +39,15 @@ public final class SlotsScreenTracker {
 	private boolean attachedIsRelicMenu;
 	private int tickCounter;
 
-	public SlotsScreenTracker(RelicState state, RelicsConfig config, DumpWriter dumpWriter,
-			RelicService service) {
+	public SlotsScreenTracker(RelicState state, RelicService service) {
 		this.state = state;
-		this.config = config;
-		this.dumpWriter = dumpWriter;
 		this.service = service;
-		this.parser = new SlotsMenuParser(config);
-	}
-
-	/** Rebuilds the compiled patterns after the config changed. */
-	public void reloadPatterns() {
-		this.parser = new SlotsMenuParser(config);
-	}
-
-	public SlotsMenuParser parser() {
-		return parser;
-	}
-
-	public DumpWriter dumpWriter() {
-		return dumpWriter;
 	}
 
 	public void register() {
 		// Every container is attached to, because whether this is the relic menu can only be told
-		// from its contents — the menu's title is a run of private-use glyphs from a custom GUI
-		// font and carries no readable text. The contents arrive a few ticks after init, so the
-		// decision is deferred to the first scan.
+		// from its contents — the menu's title carries no readable text. The contents arrive a few
+		// ticks after init, so the decision is deferred to the first scan.
 		ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
 			if (screen instanceof AbstractContainerScreen<?> containerScreen) {
 				attach(containerScreen);
@@ -116,29 +87,17 @@ public final class SlotsScreenTracker {
 			return;
 		}
 
-		boolean first = lastSnapshot == null;
 		lastSnapshot = snapshot;
 		lastReading = parser.parse(snapshot);
 
 		if (lastReading.relicMenu() && !attachedIsRelicMenu) {
 			attachedIsRelicMenu = true;
 
-			if (config.verboseTracking) {
-				PrimeRelicsClient.LOGGER.info("Relic menu recognised ({} set tabs, forms {})",
-						lastReading.setNames().size(), lastReading.equippedForms());
-			}
-
-			// Opening the menu is the moment to re-check which citybuild this is: the player may
-			// have switched servers since the last poll. It also switches the service to its fast
-			// poll, so equipping a relic — or editing on the website — shows up within seconds
-			// instead of at the next minute boundary.
+			// Opening the menu is a good moment to re-check the citybuild, and it switches the
+			// service to its fast poll so equipping a relic — or editing on the website — shows up
+			// within a second instead of at the next minute boundary.
 			service.setMenuOpen(true);
 			service.refreshForMenu();
-		}
-
-		// Non-relic containers are only worth dumping while hunting for the menu.
-		if (attachedIsRelicMenu || config.discoveryMode) {
-			dump(first ? "open" : "change", snapshot, lastReading);
 		}
 
 		if (attachedIsRelicMenu) {
@@ -149,11 +108,6 @@ public final class SlotsScreenTracker {
 	private void onRemove(Screen removed) {
 		if (attachedScreen != removed) {
 			return;
-		}
-
-		// The final state matters most: it is what the player left the menu on.
-		if (lastSnapshot != null && (attachedIsRelicMenu || config.discoveryMode)) {
-			dump("close", lastSnapshot, lastReading);
 		}
 
 		boolean wasRelicMenu = attachedIsRelicMenu;
@@ -173,24 +127,11 @@ public final class SlotsScreenTracker {
 				CompletableFuture.delayedExecutor(CLOSE_REFRESH_DELAY_MILLIS, TimeUnit.MILLISECONDS));
 	}
 
-	private void dump(String event, ContainerSnapshot snapshot, SlotsMenuReading reading) {
-		if (!config.autoDump || dumpWriter.atLimit()) {
-			return;
-		}
-
-		Path file = dumpWriter.write(event, snapshot, reading);
-
-		if (file != null && config.verboseTracking) {
-			PrimeRelicsClient.LOGGER.info("Dumped container ({}) -> {}", event, file.getFileName());
-		}
-	}
-
 	/**
 	 * Re-runs the last reading against freshly fetched relic data.
 	 *
-	 * <p>Only while the menu is actually on screen: once it is closed the active set is a memory,
-	 * and re-applying would advertise it as a live reading again. The refreshed relic data still
-	 * reaches the overlay — the set id does not change when its contents do.
+	 * <p>Only while the menu is actually on screen: once it is closed the active set comes from the
+	 * API's own flag, and re-applying a stale menu reading would fight it.
 	 */
 	public void reapplyLastReading() {
 		SlotsMenuReading reading = lastReading;
@@ -213,16 +154,10 @@ public final class SlotsScreenTracker {
 		}
 
 		int menuNumber = reading.activeSetNumber();
-		Integer setId = resolveSetId(menuNumber, reading, overview);
 
 		// A null id is still worth recording: on a citybuild where the player owns no relics the
 		// API has nothing to match, but the menu's set number is real and gets shown on its own.
-		state.onActiveSetObserved(menuNumber, setId);
-
-		if (config.verboseTracking) {
-			PrimeRelicsClient.LOGGER.info("Active relic set: menu #{} -> API set id {}",
-					menuNumber, setId != null ? setId : "none (no relic data for this citybuild)");
-		}
+		state.onActiveSetObserved(menuNumber, resolveSetId(menuNumber, reading, overview));
 	}
 
 	/**

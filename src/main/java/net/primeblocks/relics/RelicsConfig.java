@@ -14,14 +14,20 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.primeblocks.relics.api.PrimeApiClient;
 
 /**
- * User-editable settings, stored at {@code config/primerelics.json}.
+ * User settings, stored at {@code config/primeslots.json}.
  *
- * <p>Deliberately not stored here: the JWT from the in-game login flow. It lives in memory for the
- * session only, so the config file never holds a credential.
+ * <p>Everything here is reachable from the in-game editor (F6); the file exists so settings
+ * survive restarts, not as the place people are expected to work. The API token is deliberately
+ * kept elsewhere — see {@link net.primeblocks.relics.auth.TokenStore}.
  */
 public final class RelicsConfig {
-	private static final String FILE_NAME = "primerelics.json";
+	private static final String FILE_NAME = "primeslots.json";
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+
+	public static final double MIN_SCALE = 0.5;
+	public static final double MAX_SCALE = 3.0;
+	public static final double SCALE_STEP = 0.1;
+	public static final int MIN_MENU_REFRESH_MILLIS = 250;
 
 	/** Master switch for the HUD overlay. */
 	public boolean hudEnabled = true;
@@ -33,10 +39,7 @@ public final class RelicsConfig {
 	/** Overlay scale, 1.0 = normal. Clamped to {@link #MIN_SCALE}..{@link #MAX_SCALE}. */
 	public double hudScale = 1.0;
 
-	/**
-	 * Alpha of the panel behind the text, 0..255. Zero draws no panel at all, leaving the text
-	 * floating over the world.
-	 */
+	/** Alpha of the panel behind the text, 0..255. Zero draws no panel at all. */
 	public int backgroundOpacity = 144;
 
 	/** List the equipped relics with their form and tier. */
@@ -54,10 +57,7 @@ public final class RelicsConfig {
 	/** Render the two pair synergies of the active set. */
 	public boolean showSynergies = true;
 
-	/**
-	 * Render the set's effective values — the same figures the menu shows under "Relikt-Werte",
-	 * computed client-side so they stay visible after the menu is closed.
-	 */
+	/** Render the set's effective values — the same figures the menu shows under "Relikt-Werte". */
 	public boolean showTotals = true;
 
 	/**
@@ -69,14 +69,10 @@ public final class RelicsConfig {
 
 	public String apiBaseUrl = PrimeApiClient.DEFAULT_BASE_URL;
 
-	/** How often relic data is re-fetched from the API while connected. */
+	/** How often relic data is re-fetched while connected. */
 	public int refreshIntervalSeconds = 60;
 
-	/**
-	 * How often to re-fetch while the {@code /slots} menu is open, in milliseconds. This is when
-	 * relics get swapped, so it pays to look often; clamped to at least
-	 * {@link #MIN_MENU_REFRESH_MILLIS} so the API is never hammered.
-	 */
+	/** How often to re-fetch while the relic menu is open, in milliseconds. */
 	public int menuRefreshMillis = 1000;
 
 	/**
@@ -84,56 +80,6 @@ public final class RelicsConfig {
 	 * Blank disables the check.
 	 */
 	public String serverAddressFilter = "primeblocks";
-
-	/**
-	 * Matched against item names to find the set tabs. Group 1 is the set's Roman numeral, group 2
-	 * its custom name when the player has renamed it.
-	 *
-	 * <p>The {@code /slots} menu is identified by these tabs rather than by its window title: the
-	 * real title is a run of private-use glyphs from a custom GUI font and contains no readable
-	 * text, so no title pattern can match it.
-	 */
-	public String setTabPattern = "^Relikt-Set\\s+([IVX]+)(?::\\s*(.+))?$";
-
-	/**
-	 * Matched against a set tab's name and lore to recognise the equipped set. The equipped tab
-	 * reads "Dies ist dein aktuell ausgerüstetes Relikt-Set."; an enchantment glint is used as a
-	 * fallback signal when this finds nothing.
-	 */
-	public String activeSetMarkerPattern = "aktuell\\s+ausger(ü|ue)stetes";
-
-	/** Set tabs carrying this in their lore have not been purchased and are skipped. */
-	public String lockedSetPattern = "nicht\\s+freigeschaltet";
-
-	/** Set names matching this are placeholders, so the overlay shows "Set II" instead. */
-	public String unnamedSetPattern = "unbenannt";
-
-	/** Matched against item names to find equipped relics; group 1 is the die size. */
-	public String relicNamePattern = "^D(0|4|6|8|10|12|20)-Relikt\\b";
-
-	/** Log every container the tracker inspects. Useful while calibrating the patterns above. */
-	public boolean verboseTracking = false;
-
-	/**
-	 * Write container snapshots to {@code primerelics-dumps/} automatically as a menu opens,
-	 * changes and closes.
-	 *
-	 * <p>On by default because there is no other way to capture the menu: a container screen holds
-	 * keyboard focus, so {@code /primerelics dump} cannot be typed while it is open.
-	 */
-	public boolean autoDump = true;
-
-	/**
-	 * Also watch and dump containers whose title does not match
-	 * {@link #slotsScreenTitlePattern}.
-	 *
-	 * <p>The title pattern is a guess until a real dump confirms it. Without discovery mode a wrong
-	 * guess silently captures nothing. Turn this off once the pattern is known to match.
-	 */
-	public boolean discoveryMode = true;
-
-	/** Safety cap so a session cannot fill the disk with dumps. */
-	public int maxDumpsPerSession = 60;
 
 	public static Path path() {
 		return FabricLoader.getInstance().getConfigDir().resolve(FILE_NAME);
@@ -143,17 +89,31 @@ public final class RelicsConfig {
 		Path file = path();
 
 		if (!Files.exists(file)) {
+			// The mod was called PrimeRelics before; carry the old settings over rather than
+			// silently resetting someone's overlay position.
+			Path legacy = file.resolveSibling("primerelics.json");
+
+			if (Files.exists(legacy)) {
+				try {
+					Files.move(legacy, file);
+				} catch (IOException e) {
+					PrimeRelicsClient.LOGGER.warn("Could not migrate {}", legacy, e);
+				}
+			}
+		}
+
+		if (!Files.exists(file)) {
 			RelicsConfig config = new RelicsConfig();
 			config.save();
 			return config;
 		}
 
 		try {
-			String json = Files.readString(file, StandardCharsets.UTF_8);
-			RelicsConfig config = GSON.fromJson(json, RelicsConfig.class);
+			RelicsConfig config = GSON.fromJson(Files.readString(file, StandardCharsets.UTF_8),
+					RelicsConfig.class);
 			return config != null ? config : new RelicsConfig();
 		} catch (IOException | JsonSyntaxException e) {
-			PrimeRelicsClient.LOGGER.warn("Could not read {}, falling back to defaults", file, e);
+			PrimeRelicsClient.LOGGER.warn("Could not read {}, using defaults", file, e);
 			return new RelicsConfig();
 		}
 	}
@@ -169,12 +129,6 @@ public final class RelicsConfig {
 		}
 	}
 
-	public static final double MIN_SCALE = 0.5;
-	public static final double MAX_SCALE = 3.0;
-	public static final double SCALE_STEP = 0.1;
-
-	public static final int MIN_MENU_REFRESH_MILLIS = 250;
-
 	public int refreshIntervalMillis() {
 		return Math.max(10, refreshIntervalSeconds) * 1000;
 	}
@@ -189,11 +143,6 @@ public final class RelicsConfig {
 	}
 
 	public int backgroundColour() {
-		int alpha = Math.clamp(backgroundOpacity, 0, 255);
-		return alpha << 24;
-	}
-
-	public boolean hasBackground() {
-		return Math.clamp(backgroundOpacity, 0, 255) > 0;
+		return Math.clamp(backgroundOpacity, 0, 255) << 24;
 	}
 }

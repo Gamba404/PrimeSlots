@@ -17,8 +17,8 @@ import net.minecraft.network.chat.Component;
 @Mixin(PlayerTabOverlay.class)
 public interface PlayerTabOverlayAccessor {
 	@Accessor("header")
-	Component primerelics$getHeader();
+	Component primeslots$getHeader();
 
 	@Accessor("footer")
-	Component primerelics$getFooter();
+	Component primeslots$getFooter();
 }

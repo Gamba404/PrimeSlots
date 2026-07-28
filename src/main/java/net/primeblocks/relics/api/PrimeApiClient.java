@@ -53,7 +53,7 @@ public final class PrimeApiClient {
 				.connectTimeout(Duration.ofSeconds(5))
 				.followRedirects(HttpClient.Redirect.NORMAL)
 				.executor(Executors.newThreadPerTaskExecutor(
-						Thread.ofVirtual().name("primerelics-http-", 0).factory()))
+						Thread.ofVirtual().name("primeslots-http-", 0).factory()))
 				.build();
 	}
 
@@ -134,7 +134,7 @@ public final class PrimeApiClient {
 
 		if (!envelope.success() || envelope.data() == null) {
 			throw new ApiException(request.uri().getPath() + " failed (HTTP "
-					+ response.statusCode() + "): " + envelope.errorText());
+					+ response.statusCode() + "): " + envelope.errorText(), response.statusCode());
 		}
 
 		return envelope.data();
@@ -142,12 +142,30 @@ public final class PrimeApiClient {
 
 	/** Any non-success outcome from the API, including transport-level failures wrapped by callers. */
 	public static final class ApiException extends RuntimeException {
+		/** HTTP status, or 0 when the failure happened before a response arrived. */
+		private final int statusCode;
+
 		public ApiException(String message) {
+			this(message, 0);
+		}
+
+		public ApiException(String message, int statusCode) {
 			super(message);
+			this.statusCode = statusCode;
 		}
 
 		public ApiException(String message, Throwable cause) {
 			super(message, cause);
+			this.statusCode = 0;
+		}
+
+		public int statusCode() {
+			return statusCode;
+		}
+
+		/** The token was rejected — expired, revoked, or issued for another player. */
+		public boolean isUnauthorized() {
+			return statusCode == 401 || statusCode == 403;
 		}
 	}
 
