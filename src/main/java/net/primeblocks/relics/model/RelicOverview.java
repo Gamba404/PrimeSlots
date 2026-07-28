@@ -32,4 +32,15 @@ public record RelicOverview(
 
 		return null;
 	}
+
+	/** The set the API marks as equipped, or {@code null} if none is flagged. */
+	public RelicSet activeSet() {
+		for (RelicSet set : setsOrEmpty()) {
+			if (set.active()) {
+				return set;
+			}
+		}
+
+		return null;
+	}
 }

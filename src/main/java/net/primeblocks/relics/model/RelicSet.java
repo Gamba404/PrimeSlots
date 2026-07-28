@@ -7,15 +7,17 @@ import com.google.gson.annotations.SerializedName;
 /**
  * One of the player's relic sets (up to five per the wiki). Mirrors {@code RelicSetResponse}.
  *
- * <p>Note: the API deliberately does not say which set is currently equipped, and carries no
- * set name. Both of those come from the in-game {@code /slots} menu — see
- * {@code net.primeblocks.relics.tracking}.
+ * <p>{@code active} was added to the API on 2026-07-28 and marks the equipped set. Before that the
+ * only way to know was to read the {@code /slots} menu while it was open; the menu is still parsed,
+ * because it reacts instantly and is the only source of the player's custom set names.
  *
- * @param id    server-side set id
- * @param slots equipped relics, keyed by slot index
+ * @param id     server-side set id
+ * @param active whether this is the set the player currently has equipped
+ * @param slots  equipped relics, keyed by slot index
  */
 public record RelicSet(
 		@SerializedName("id") int id,
+		@SerializedName("active") boolean active,
 		@SerializedName("slots") List<RelicSlot> slots
 ) {
 	public List<RelicSlot> slotsOrEmpty() {

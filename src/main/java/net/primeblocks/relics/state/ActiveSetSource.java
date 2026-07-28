@@ -2,9 +2,11 @@ package net.primeblocks.relics.state;
 
 /** Where the "currently equipped set" information came from. */
 public enum ActiveSetSource {
-	/** Nothing known yet — the player has not opened {@code /slots} since joining. */
+	/** Nothing known yet. */
 	UNKNOWN,
-	/** Read live from an open {@code /slots} menu. */
+	/** Straight from the API's {@code active} flag — authoritative, and needs no menu visit. */
+	API,
+	/** Read live from an open {@code /slots} menu; reacts faster than the next poll. */
 	SLOTS_MENU,
 	/** Remembered from the last time the {@code /slots} menu was open this session. */
 	REMEMBERED,

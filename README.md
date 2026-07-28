@@ -7,25 +7,24 @@ Gesamtwerten.
 Autor: BIG_Gamba. Das Mod-Icon ist aus den `relic_altar`-Blocktexturen des PrimeBlocks-
 Serverresourcepacks isometrisch zusammengesetzt (`scratchpad/make_icon.py`).
 
-## Die Kernfrage: reicht die API?
+## Woher die Daten kommen
 
-**Nein.** Die API liefert *was* in den Sets steckt, aber nicht *welches Set getragen wird.*
-
-`RelicSetResponse` besteht ausschließlich aus `{ id, slots }` — kein `active`-Flag, kein Set-Name
-(obwohl das Wiki sagt, dass Sets umbenennbar sind). Alle Schemas sind mit
-`additionalProperties: false` deklariert, es gibt also auch keine undokumentierten Felder. Live
-gegen den Dienst geprüft: die Antworten enthalten wirklich nur diese Felder.
-
-Deshalb kombiniert der Mod zwei Quellen:
+Seit dem 28.07.2026 trägt `RelicSetResponse` ein **`active`**-Flag, das das ausgerüstete Set
+markiert. Damit beantwortet die API die zentrale Frage selbst — das Overlay steht direkt nach dem
+Joinen, ohne dass `/slots` je geöffnet werden muss.
 
 | | Quelle | liefert |
 |---|---|---|
-| **A** | Public API | Relikte pro Set: Form (`d`), Level, Stats mit Level und `negative`-Flag |
-| **B** | `/slots`-Menü im Spiel | welches Set aktiv ist, und die (umbenannten) Set-Namen |
+| **A** | Public API | alle Sets samt Relikten, Stats — und `active` |
+| **B** | `/slots`-Menü im Spiel | die **Set-Namen** (nur dort), und eine Reaktion binnen 250 ms |
 
-B ist nur lesbar, solange das Menü offen ist. Der Mod merkt sich das zuletzt gesehene Set und
-markiert es im HUD als „(zuletzt gesehen)“, statt eine womöglich veraltete Angabe als Fakt
-darzustellen. Hat ein Spieler nur ein Set, wird `/slots` gar nicht gebraucht.
+B bleibt drin, weil die Namen (`Money`) nirgends sonst stehen und weil das Menü sofort reagiert,
+während der Poll bis zu einer Sekunde braucht. Bei Widerspruch gewinnt das offene Menü; sobald es
+zu ist, korrigiert der nächste Abruf über `active`.
+
+**Historisch:** vorher bestand `RelicSetResponse` nur aus `{ id, slots }`. Das Menü-Auslesen war
+damals die einzige Möglichkeit, das aktive Set zu bestimmen, und ist der Grund für den
+Container-Parser in `tracking/`.
 
 ## Was über die API herausgefunden wurde
 
@@ -191,6 +190,20 @@ JAVA_HOME="$LOCALAPPDATA/Packages/Microsoft.4297127D64EC6_8wekyb3d8bbwe/LocalCac
 ```
 
 Ergebnis: `build/libs/primeslots-26.2.jar`.
+
+## CI
+
+`.github/workflows/build.yml` baut bei jedem Push auf `main`, bei Pull Requests und auf Knopfdruck
+(`workflow_dispatch`). Die Jar landet als Build-Artefakt, benannt nach `mod_version`.
+
+Ein Tag `v*` erzeugt zusätzlich ein GitHub-Release mit der Jar im Anhang:
+
+```bash
+git tag v26.2 && git push origin v26.2
+```
+
+Hinweis für Windows: `gradlew` braucht im Git das Ausführbar-Bit, sonst bricht der Runner mit
+„Permission denied“ ab. Gesetzt mit `git update-index --chmod=+x gradlew`.
 
 ### Versionsschema
 

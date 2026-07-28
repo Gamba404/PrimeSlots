@@ -76,7 +76,22 @@ public final class RelicState {
 		this.lastFetchAt = System.currentTimeMillis();
 		this.lastError = null;
 
-		// With a single set there is nothing to choose between, so the menu is not needed.
+		// The API flags the equipped set itself, so the overlay works straight after joining —
+		// no need to open /slots at all. The menu is still read because it reacts within a tick
+		// rather than at the next poll, so a live reading is not overwritten by this.
+		RelicSet flagged = overview.activeSet();
+
+		if (flagged != null) {
+			if (activeSetSource != ActiveSetSource.SLOTS_MENU) {
+				this.activeSetId = flagged.id();
+				this.activeSetNumber = flagged.id();
+				this.activeSetSource = ActiveSetSource.API;
+			}
+
+			return;
+		}
+
+		// Older servers do not send the flag; with a single set there is nothing to choose between.
 		List<RelicSet> sets = overview.setsOrEmpty();
 
 		if (sets.size() == 1 && activeSetSource != ActiveSetSource.SLOTS_MENU) {

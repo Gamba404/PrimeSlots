@@ -190,8 +190,8 @@ public final class RelicOverlayRenderer {
 		String label = name != null ? name + " (" + fallback + ")" : fallback;
 
 		label = switch (state.activeSetSource()) {
-			case SLOTS_MENU, ONLY_SET -> label;
-			// The player could have switched sets since; say so rather than assert stale data.
+			case API, SLOTS_MENU, ONLY_SET -> label;
+			// Only reachable in the gap between closing the menu and the next poll confirming it.
 			case REMEMBERED -> label + " *";
 			case UNKNOWN -> label + " (?)";
 		};
@@ -220,7 +220,8 @@ public final class RelicOverlayRenderer {
 		}
 
 		if (state.activeSetSource() == ActiveSetSource.UNKNOWN) {
-			return "/slots öffnen, um das aktive Set zu erkennen";
+			// The API flags the equipped set, so this only happens if no set is flagged at all.
+			return "kein Set ausgerüstet";
 		}
 
 		return null;
