@@ -1,0 +1,30 @@
+{
+	"schemaVersion": 1,
+	"id": "primeslots",
+	"version": "${version}",
+	"name": "PrimeSlots",
+	"description": "Zeigt das aktuell ausgerüstete Relikt-Set (/slots) samt Stats, Synergien und effektiven Gesamtwerten als HUD-Overlay an. Erkennt den Citybuild automatisch.",
+	"authors": [
+		"BIG_Gamba"
+	],
+	"contact": {
+		"homepage": "https://wiki.primeblocks.net/de/citybuild/relikt-system"
+	},
+	"license": "MIT",
+	"icon": "assets/primeslots/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"net.primeblocks.relics.PrimeRelicsClient"
+		]
+	},
+	"mixins": [
+		"primeslots.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"fabric-api": "*",
+		"minecraft": "~26.2",
+		"java": ">=25"
+	}
+}

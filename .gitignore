@@ -1,0 +1,8 @@
+.gradle/
+build/
+run/
+primerelics-dumps/
+
+.idea/
+*.iml
+.vscode/
