@@ -6,3 +6,7 @@ primerelics-dumps/
 .idea/
 *.iml
 .vscode/
+
+.claude/
+CLAUDE.md
+.mcp.json

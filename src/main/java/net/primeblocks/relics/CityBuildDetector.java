@@ -30,11 +30,16 @@ import net.primeblocks.relics.mixin.PlayerTabOverlayAccessor;
  */
 public final class CityBuildDetector {
 	/**
-	 * Matches both the long form the tab footer uses ("CityBuild-1") and the short form
-	 * ("CB2", "CB 3", "CB-2") in case it appears elsewhere.
+	 * Matches the long form the tab footer uses ("CityBuild-1"), the short form ("CB2", "CB 3",
+	 * "CB-2"), and the per-instance suffix PrimeBlocks added for load-balanced hubs ("CB1a",
+	 * "CityBuild-1b"). The suffix letter is matched but not captured — group 1 is always just the
+	 * digits, so "CB1a" and "CB1b" both resolve to "cb1".
+	 *
+	 * <p>Without tolerating that suffix, {@code find()} fails outright on a hub server: "1" and "a"
+	 * are both word characters, so there is no {@code \b} between them for the pattern to anchor on.
 	 */
 	private static final Pattern CITYBUILD =
-			Pattern.compile("\\b(?:cb|citybuild)\\s*-?\\s*([1-9][0-9]?)\\b",
+			Pattern.compile("\\b(?:cb|citybuild)\\s*-?\\s*([1-9][0-9]?)\\s*-?\\s*[a-z]?\\b",
 					Pattern.CASE_INSENSITIVE);
 
 	private CityBuildDetector() {
