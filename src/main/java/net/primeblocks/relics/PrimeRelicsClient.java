@@ -1,6 +1,6 @@
 package net.primeblocks.relics;
 
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,9 +58,9 @@ public final class PrimeRelicsClient implements ClientModInitializer {
 		// Ordinary key mappings, so they appear under Options -> Controls -> Miscellaneous and can
 		// be rebound there. F6/F7 are unbound in vanilla.
 		KeyMapping editKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-				"key.primeslots.edit_hud", GLFW.GLFW_KEY_F6, KeyMapping.Category.MISC));
+				"key.primeslots.edit_hud", InputConstants.KEY_F6, KeyMapping.Category.MISC));
 		KeyMapping toggleKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-				"key.primeslots.toggle_hud", GLFW.GLFW_KEY_F7, KeyMapping.Category.MISC));
+				"key.primeslots.toggle_hud", InputConstants.KEY_F7, KeyMapping.Category.MISC));
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			auth.tick(client);

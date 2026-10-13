@@ -55,6 +55,6 @@ mit angezeigt werden. Esc speichert.
 
 ## Voraussetzungen
 
-Minecraft **26.2**, Fabric Loader und Fabric API. Die Jar heißt nach der Minecraft-Version, für die
-sie gebaut ist: `primeslots-26.2.jar`.
+Minecraft **26.3**, Fabric Loader und Fabric API. Die Jar heißt nach der Minecraft-Version, für die
+sie gebaut ist: `primeslots-26.3.jar`.
 
